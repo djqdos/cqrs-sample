@@ -1,4 +1,4 @@
-using CQRSSample.Components;
+using Website.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
