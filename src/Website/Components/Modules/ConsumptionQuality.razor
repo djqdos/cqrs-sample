@@ -1,0 +1,148 @@
+﻿@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Globalization
+@using Website.Models
+
+@inject NavigationManager NavigationManager
+<style>
+	.Missing {
+		background-color: indianred;
+		color: white;
+	}
+
+	.Partial {
+		background-color: orange;
+		color: white;
+	}
+
+	.Complete {
+		background-color: green;
+		color: white;
+	}
+
+	.consumption-box {
+		display: block;
+		height: 20px;
+		width: 20px;
+
+		border-radius: 3px;
+		margin: 2px;
+
+		border: 1px solid grey;
+
+		display: inline-block;
+	}
+
+
+	table {
+		border: 1px solid black;
+		border-radius: 5px;
+	}
+
+	td {
+		padding: 5px;
+	}
+
+
+	/* animations */
+	.fade {
+		animation: fade 0.5s linear forwards;
+	}
+
+	@@keyframes fade {
+		0%   { opacity: 0;}
+		100% { opacity: 1;}
+	}
+</style>
+
+
+<h3>ConsumptionQuality</h3>
+
+@if (Days != null && Days.Any())
+{
+	<div>
+		<h4>Count: @Days.Count</h4>
+	</div>
+
+
+
+	<div>
+		@foreach (var day in Days.OrderBy(x => x.Date))
+		{
+			<div class="fade consumption-box @day.DayComplete.ToString()" data-title="@day.Date"title="@day.Date">
+
+			</div>
+		}
+	</div>
+}
+
+
+@if (Days != null && Days.Any())
+{
+	<div>
+
+		@foreach (var day in Days.OrderBy(x => x.Date).GroupBy(x => x.Date.Month))
+		{
+			<h4>@CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(day.Key)</h4>
+			<table>
+				@foreach (var f in day.OrderBy(x => x.Date)) {
+					<tr class="fade @f.DayComplete">
+						<td>@f.Date</td>
+						<td>@f.DayComplete</td>
+						<td>@f.MeterId</td>
+					</tr>
+				}
+			</table>
+
+		}
+	</div>
+}
+
+
+
+@code {
+
+	private HubConnection? hubConnection;
+
+	private List<ConsumptionDay> Days = new();
+
+	private CancellationTokenSource asyncCancellationTokenSource = new CancellationTokenSource();
+
+	protected override async Task OnInitializedAsync()
+	{
+		hubConnection = new HubConnectionBuilder()
+			.WithUrl(NavigationManager.ToAbsoluteUri("/consumptionstreamhub"))
+			.Build();
+
+		await hubConnection.StartAsync();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender) 
+	{
+		if (firstRender)
+		{
+			// add the call to signalr-based method in the OnAfterRenderAsync method
+			// Otherwise, even though it's an async method, the UI gets locked until it's actually complete
+			await GetAsyncStream();
+		}
+	}
+
+
+
+	/// <summary>
+	/// Call to a SignalR-based method.
+	/// Check Hubs/ConsumptionStreamHub.cs
+	/// </summary>
+	/// <returns></returns>
+	private async Task GetAsyncStream()
+	{
+		if (hubConnection is null) return;
+		var stream = hubConnection.StreamAsync<ConsumptionDay>("GetStreamAsync", asyncCancellationTokenSource.Token);
+
+		await foreach(var count in stream)
+		{
+			Days.Add(count);
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+}
